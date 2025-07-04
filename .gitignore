@@ -1,0 +1,33 @@
+# Ventoy Linux Recovery Helper - .gitignore
+
+# Downloaded ISO files (too large for git)
+isos/*.iso
+
+# Ventoy binaries
+ventoy-1.0.99-linux.tar.gz
+ventoy-1.0.99/
+
+# Temporary files
+.checksums
+*.tmp
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Runtime files
+*.pid
+*.sock
