@@ -34,7 +34,7 @@ A comprehensive, automated toolkit for creating multi-boot USB recovery drives u
 
 ### 1. Clone and Setup
 ```bash
-git clone https://github.com/yourusername/ventoy_linux_recovery_helper.git
+git clone https://github.com/zudsniper/ventoy_linux_recovery_helper.git
 cd ventoy_linux_recovery_helper
 
 # Download ISOs (resumable)
@@ -181,10 +181,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Support
 
-- 🐛 [Report Bugs](https://github.com/yourusername/ventoy_linux_recovery_helper/issues)
-- 💡 [Request Features](https://github.com/yourusername/ventoy_linux_recovery_helper/issues)
-- 📖 [Documentation](https://github.com/yourusername/ventoy_linux_recovery_helper/wiki)
-- 💬 [Discussions](https://github.com/yourusername/ventoy_linux_recovery_helper/discussions)
+- 🐛 [Report Bugs](https://github.com/zudsniper/ventoy_linux_recovery_helper/issues)
+- 💡 [Request Features](https://github.com/zudsniper/ventoy_linux_recovery_helper/issues)
+- 📖 [Documentation](https://github.com/zudsniper/ventoy_linux_recovery_helper/wiki)
+- 💬 [Discussions](https://github.com/zudsniper/ventoy_linux_recovery_helper/discussions)
 
 ---
 
