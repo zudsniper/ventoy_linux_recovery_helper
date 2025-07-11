@@ -10,28 +10,37 @@ A comprehensive, automated toolkit for creating multi-boot USB recovery drives u
 
 **Need to recover a damaged Linux system RIGHT NOW?** You don't need to set up the full Ventoy USB!
 
+### Fastest Method (Recommended):
 1. Boot from any Ubuntu/Debian Live USB
 2. Open a terminal and clone this repository:
    ```bash
    git clone https://github.com/yourusername/ventoy_linux_recovery_helper.git
    cd ventoy_linux_recovery_helper
    ```
-3. Run the recovery script with sudo:
+3. Run the quick recovery wrapper:
    ```bash
-   sudo ./auto-recovery.sh
+   sudo ./quick-recovery.sh
    ```
-4. Choose either:
-   - **Option 1**: Auto-detect partitions (recommended)
-   - **Option 2**: Manual partition selection (if auto-detect fails)
 
-The script will automatically:
-- ✅ Detect or let you select your Linux root partition
-- ✅ Check and repair filesystems
-- ✅ Mount your system properly
-- ✅ Fix broken packages
-- ✅ Rebuild initramfs
-- ✅ Update GRUB bootloader
-- ✅ Show system status
+This will:
+- Install any missing dependencies (like cryptsetup for encrypted systems)
+- Run a diagnostic test to show your system layout
+- Launch the recovery process
+
+### Manual Method:
+If you prefer to run the recovery directly:
+```bash
+sudo ./auto-recovery.sh
+```
+
+### Features:
+- ✅ **Encrypted System Support** - Automatically detects and unlocks LUKS encrypted partitions
+- ✅ **Smart Partition Detection** - Distinguishes between root, boot, and EFI partitions
+- ✅ **Filesystem Repair** - Runs fsck on unmounted partitions
+- ✅ **Package Management** - Fixes broken packages and dependencies
+- ✅ **Boot Repair** - Rebuilds initramfs and updates GRUB
+- ✅ **System Analysis** - Shows failed services and recent errors
+- ✅ **Manual Override** - Option to manually select partitions if auto-detect fails
 
 ## 🚀 Features
 

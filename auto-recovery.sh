@@ -29,12 +29,99 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Function to check if partition might be encrypted
+is_encrypted_partition() {
+    local part=$1
+    # Check if it's a crypto/LUKS partition
+    if lsblk -f | grep "$part" | grep -q "crypto"; then
+        return 0
+    fi
+    # Also check with cryptsetup
+    if command -v cryptsetup >/dev/null 2>&1; then
+        if cryptsetup isLuks "/dev/$part" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Function to unlock encrypted partition
+unlock_encrypted_partition() {
+    local part=$1
+    log_info "Partition /dev/$part appears to be encrypted (LUKS)"
+    
+    if ! command -v cryptsetup >/dev/null 2>&1; then
+        log_error "cryptsetup not found - cannot unlock encrypted partitions"
+        log_info "Install cryptsetup with: apt install cryptsetup"
+        return 1
+    fi
+    
+    # Check if already unlocked
+    local mapper_name="recovery_${part}"
+    if [ -b "/dev/mapper/$mapper_name" ]; then
+        log_info "Encrypted partition already unlocked at /dev/mapper/$mapper_name"
+        ROOT_PART="mapper/$mapper_name"
+        return 0
+    fi
+    
+    log_info "Please enter the passphrase to unlock the encrypted partition:"
+    if cryptsetup luksOpen "/dev/$part" "$mapper_name"; then
+        log_success "Encrypted partition unlocked successfully"
+        ROOT_PART="mapper/$mapper_name"
+        return 0
+    else
+        log_error "Failed to unlock encrypted partition"
+        return 1
+    fi
+}
+
 # Function to detect root partition automatically
 detect_root_partition() {
     log_info "Detecting root partition..."
     
+    # First check for encrypted partitions
+    CRYPTO_PARTS=$(lsblk -f | grep "crypto" | awk '{print $1}' | sed 's/[├└─]//g' | xargs)
+    
+    if [ -n "$CRYPTO_PARTS" ]; then
+        log_warning "Found encrypted partition(s): $CRYPTO_PARTS"
+        echo
+        echo "Your system appears to use disk encryption."
+        read -p "Is your root partition encrypted? (y/N): " -n 1 -r
+        echo
+        
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            # If only one encrypted partition, use it
+            CRYPTO_COUNT=$(echo "$CRYPTO_PARTS" | wc -w)
+            if [ "$CRYPTO_COUNT" -eq 1 ]; then
+                if unlock_encrypted_partition "$CRYPTO_PARTS"; then
+                    return 0
+                fi
+            else
+                # Multiple encrypted partitions, let user choose
+                log_info "Multiple encrypted partitions found. Please select:"
+                echo "$CRYPTO_PARTS" | tr ' ' '\n' | nl -nln
+                read -p "Enter the number of your root partition: " choice
+                SELECTED_PART=$(echo "$CRYPTO_PARTS" | tr ' ' '\n' | sed -n "${choice}p")
+                if [ -n "$SELECTED_PART" ]; then
+                    if unlock_encrypted_partition "$SELECTED_PART"; then
+                        return 0
+                    fi
+                fi
+            fi
+        fi
+    fi
+    
     # Look for ext4/btrfs/xfs partitions that could be root, excluding loop devices
-    ROOT_CANDIDATES=$(lsblk -f | grep -E "(ext4|btrfs|xfs)" | grep -v -E "(boot|loop)" | head -5)
+    # Also exclude small partitions (less than 5GB) which are likely /boot
+    ROOT_CANDIDATES=$(lsblk -f -b | grep -E "(ext4|btrfs|xfs)" | grep -v -E "(loop)" | while read line; do
+        part=$(echo "$line" | awk '{print $1}' | sed 's/[├└─]//g')
+        # Get partition size in bytes
+        size=$(lsblk -b -n -o SIZE "/dev/$part" 2>/dev/null || echo 0)
+        # Only consider partitions larger than 5GB (5368709120 bytes)
+        if [ "$size" -gt 5368709120 ]; then
+            echo "$line"
+        fi
+    done)
     
     if [ -z "$ROOT_CANDIDATES" ]; then
         log_error "No suitable root partitions found!"
@@ -47,8 +134,8 @@ detect_root_partition() {
     echo "$ROOT_CANDIDATES"
     echo
     
-    # Try to auto-detect the most likely root partition (excluding loop devices)
-    ROOT_PART=$(lsblk -f | grep -E "(ext4|btrfs|xfs)" | grep -v -E "(boot|loop)" | head -1 | awk '{print $1}' | sed 's/[├└─]//g' | xargs)
+    # Try to auto-detect the most likely root partition
+    ROOT_PART=$(echo "$ROOT_CANDIDATES" | head -1 | awk '{print $1}' | sed 's/[├└─]//g' | xargs)
     
     if [ -n "$ROOT_PART" ]; then
         log_info "Auto-detected root partition: /dev/$ROOT_PART"
@@ -63,17 +150,35 @@ detect_root_partition() {
 detect_boot_partition() {
     log_info "Detecting boot partition..."
     
-    # Look for boot/EFI partitions, explicitly excluding loop devices
-    BOOT_PART=$(lsblk -f | grep -iE "(boot|efi)" | grep -v "loop" | head -1 | awk '{print $1}' | sed 's/[├└─]//g' | xargs)
+    # Look for EFI partitions (FAT32/vfat)
+    EFI_PART=$(lsblk -f | grep -E "(vfat|FAT)" | grep -v "loop" | head -1 | awk '{print $1}' | sed 's/[├└─]//g' | xargs)
     
-    if [ -n "$BOOT_PART" ]; then
-        # Verify it's not a loop device
-        if [[ "$BOOT_PART" == loop* ]]; then
-            log_warning "Ignoring loop device $BOOT_PART"
-            BOOT_PART=""
-        else
-            log_info "Auto-detected boot partition: /dev/$BOOT_PART"
+    # Look for ext4 boot partitions (small ext4 partitions)
+    BOOT_PART=$(lsblk -f -b | grep -E "ext4" | grep -v "loop" | while read line; do
+        part=$(echo "$line" | awk '{print $1}' | sed 's/[├└─]//g')
+        # Get partition size in bytes
+        size=$(lsblk -b -n -o SIZE "/dev/$part" 2>/dev/null || echo 0)
+        # Boot partitions are typically less than 2GB
+        if [ "$size" -lt 2147483648 ] && [ "$size" -gt 0 ]; then
+            echo "$part"
+            break
         fi
+    done)
+    
+    # Prefer EFI partition if found
+    if [ -n "$EFI_PART" ]; then
+        log_info "Auto-detected EFI partition: /dev/$EFI_PART"
+        EFI_PART_DETECTED="$EFI_PART"
+    fi
+    
+    if [ -n "$BOOT_PART" ] && [ "$BOOT_PART" != "$ROOT_PART" ]; then
+        log_info "Auto-detected boot partition: /dev/$BOOT_PART"
+        BOOT_PART_DETECTED="$BOOT_PART"
+    fi
+    
+    # Use boot partition if found, otherwise no separate /boot
+    if [ -n "$BOOT_PART_DETECTED" ]; then
+        BOOT_PART="$BOOT_PART_DETECTED"
     else
         log_warning "No separate boot partition detected - system may use root partition for /boot"
         BOOT_PART=""
@@ -104,7 +209,7 @@ mount_system() {
     
     # Create necessary directories for bind mounts
     log_info "Creating necessary directories..."
-    for dir in dev proc sys run boot; do
+    for dir in dev proc sys run boot boot/efi; do
         if [ ! -d "/mnt/recovery/$dir" ]; then
             mkdir -p "/mnt/recovery/$dir"
         fi
@@ -116,6 +221,24 @@ mount_system() {
         if ! mount /dev/$BOOT_PART /mnt/recovery/boot; then
             log_warning "Failed to mount boot partition - continuing without it"
             BOOT_PART=""
+        fi
+    fi
+    
+    # Mount EFI partition if it exists
+    if [ -n "$EFI_PART_DETECTED" ] && [ -b "/dev/$EFI_PART_DETECTED" ]; then
+        # Determine mount point - could be /boot/efi or /efi
+        if [ -d "/mnt/recovery/boot/efi" ]; then
+            EFI_MOUNT="/mnt/recovery/boot/efi"
+        elif [ -d "/mnt/recovery/efi" ]; then
+            mkdir -p "/mnt/recovery/efi"
+            EFI_MOUNT="/mnt/recovery/efi"
+        else
+            EFI_MOUNT="/mnt/recovery/boot/efi"
+        fi
+        
+        log_info "Mounting EFI partition /dev/$EFI_PART_DETECTED to $EFI_MOUNT"
+        if ! mount /dev/$EFI_PART_DETECTED "$EFI_MOUNT"; then
+            log_warning "Failed to mount EFI partition - UEFI updates may not work"
         fi
     fi
     
@@ -276,12 +399,26 @@ cleanup_and_unmount() {
         fi
     done
     
+    # Unmount EFI if mounted
+    if [ -n "$EFI_MOUNT" ] && mountpoint -q "$EFI_MOUNT" 2>/dev/null; then
+        umount "$EFI_MOUNT" 2>/dev/null || log_warning "Could not unmount EFI partition"
+    fi
+    
     if [ -n "$BOOT_PART" ] && mountpoint -q /mnt/recovery/boot 2>/dev/null; then
         umount /mnt/recovery/boot 2>/dev/null || log_warning "Could not unmount boot partition"
     fi
     
     if mountpoint -q /mnt/recovery 2>/dev/null; then
         umount /mnt/recovery 2>/dev/null || log_warning "Could not unmount root partition"
+    fi
+    
+    # Close encrypted volume if we opened one
+    if [[ "$ROOT_PART" == mapper/* ]]; then
+        local mapper_name=$(basename "$ROOT_PART")
+        if [ -b "/dev/mapper/$mapper_name" ]; then
+            log_info "Closing encrypted volume $mapper_name"
+            cryptsetup luksClose "$mapper_name" 2>/dev/null || log_warning "Could not close encrypted volume"
+        fi
     fi
     
     log_success "Cleanup completed"
