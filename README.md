@@ -6,6 +6,33 @@ A comprehensive, automated toolkit for creating multi-boot USB recovery drives u
 ![Platform](https://img.shields.io/badge/platform-Linux-green.svg)
 ![Ventoy](https://img.shields.io/badge/Ventoy-1.0.99-orange.svg)
 
+## 🚨 Quick Recovery (Standalone Mode)
+
+**Need to recover a damaged Linux system RIGHT NOW?** You don't need to set up the full Ventoy USB!
+
+1. Boot from any Ubuntu/Debian Live USB
+2. Open a terminal and clone this repository:
+   ```bash
+   git clone https://github.com/yourusername/ventoy_linux_recovery_helper.git
+   cd ventoy_linux_recovery_helper
+   ```
+3. Run the recovery script with sudo:
+   ```bash
+   sudo ./auto-recovery.sh
+   ```
+4. Choose either:
+   - **Option 1**: Auto-detect partitions (recommended)
+   - **Option 2**: Manual partition selection (if auto-detect fails)
+
+The script will automatically:
+- ✅ Detect or let you select your Linux root partition
+- ✅ Check and repair filesystems
+- ✅ Mount your system properly
+- ✅ Fix broken packages
+- ✅ Rebuild initramfs
+- ✅ Update GRUB bootloader
+- ✅ Show system status
+
 ## 🚀 Features
 
 - **🔄 Resumable Downloads** - Never re-download ISOs
@@ -30,7 +57,7 @@ A comprehensive, automated toolkit for creating multi-boot USB recovery drives u
 - `master-recovery.sh` - Interactive recovery menu
 - Smart partition detection and mounting
 
-## 🔧 Quick Start
+## 🔧 Full Ventoy USB Setup
 
 ### 1. Clone and Setup
 ```bash
